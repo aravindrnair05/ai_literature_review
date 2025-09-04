@@ -2,4 +2,5 @@ streamlit
 PyMuPDF
 pandas
 google-generativeai
-langextract
+git+https://github.com/<username>/langextract.git
+

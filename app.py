@@ -6,7 +6,7 @@ import google.generativeai as genai
 from langextract import Extractor
 
 
-API_KEY = os.getenv("GEMINI_API_KEY")
+API_KEY = os.getenv("AIzaSyCxbkPfXQJECRyzMmS4gAFWPD-hab7G-EA")
 genai.configure(api_key=API_KEY)
 
 
