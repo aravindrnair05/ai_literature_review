@@ -3,7 +3,8 @@ import fitz
 import os
 import pandas as pd
 import google.generativeai as genai
-from langextract import Extractor
+from langextract import extract
+
 
 
 API_KEY = os.getenv("AIzaSyCxbkPfXQJECRyzMmS4gAFWPD-hab7G-EA")
