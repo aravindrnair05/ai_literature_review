@@ -1,15 +1,15 @@
 import streamlit as st
-import fitz  # PyMuPDF
+import fitz  
 import os
 import pandas as pd
 import google.generativeai as genai
 from langextract import Extractor
 
-# --- CONFIG ---
+
 API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=API_KEY)
 
-# --- FUNCTIONS ---
+
 
 def extract_text_pymupdf(file):
     text = ""
@@ -36,7 +36,7 @@ def run_gemini_extraction(text, model="gemini-1.5-flash"):
     return result
 
 
-# --- STREAMLIT APP ---
+
 st.set_page_config(page_title="Literature Review AI", layout="wide")
 st.title("📄 Literature Review AI")
 
