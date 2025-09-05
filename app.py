@@ -1,117 +1,114 @@
 import streamlit as st
-import fitz  
-import os
 import pandas as pd
-import google.generativeai as genai
-from langextract import extract
+import tempfile
+import os
+from PyPDF2 import PdfReader
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from llm_client import GeminiExtractor
 
+# ----------------------------
+# Helper function
+# ----------------------------
+def process_single_file(filename, file_bytes, extractor):
+    """
+    Save uploaded PDF temporarily, extract text, and run GeminiExtractor.
+    """
+    # Save PDF to temp file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(file_bytes)
+        temp_path = tmp.name
 
-
-API_KEY = os.getenv("AIzaSyCxbkPfXQJECRyzMmS4gAFWPD-hab7G-EA")
-genai.configure(api_key=API_KEY)
-
-
-
-def extract_text_pymupdf(file):
     text = ""
-    doc = fitz.open(stream=file.read(), filetype="pdf")
-    for page in doc:
-        text += page.get_text("text") + "\n"
-    return text
+    try:
+        reader = PdfReader(temp_path)
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
+    except Exception as e:
+        text = f"Error extracting text from {filename}: {e}"
 
-
-def run_gemini_extraction(text, model="gemini-1.5-flash"):
-    schema = {
-        "title": "string",
-        "authors": ["string"],
-        "year": "string",
-        "journal": "string",
-        "objective": "string",
-        "methodology": "string",
-        "findings": "string",
-        "limitations": "string",
-    }
-
-    extractor = Extractor(schema=schema, model=model, api_key=API_KEY)
-    result = extractor.extract(text)
-    return result
-
-
-
-st.set_page_config(page_title="Literature Review AI", layout="wide")
-st.title("📄 Literature Review AI")
-
-with st.sidebar:
-    st.header("⚙️ Settings")
-    use_langextract = st.checkbox("Use LangExtract if available", value=True)
-    model_choice = st.selectbox("Select Model", ["gemini-1.5-flash", "gemini-1.5-pro"])
-    output_choice = st.radio("Export results to", ["CSV", "Google Sheets"], index=0)
-
-uploaded_files = st.file_uploader("Upload up to 50 PDF research papers", type=["pdf"], accept_multiple_files=True)
-
-if uploaded_files:
-    results = []
-    for uploaded_file in uploaded_files:
-        st.write(f"Processing **{uploaded_file.name}** ...")
-
-        # Extract text with PyMuPDF
-        text = extract_text_pymupdf(uploaded_file)
-
-        # Run extraction
-        if use_langextract:
-            extracted = run_gemini_extraction(text, model=model_choice)
-        else:
-            prompt = """
-            Extract the following fields from the text:
-            - Title
-            - Authors
-            - Year
-            - Journal/Conference
-            - Objective
-            - Methodology
-            - Findings
-            - Limitations
-            Return as JSON.
-            """
-            response = genai.GenerativeModel(model_choice).generate_content([text, prompt])
-            extracted = response.candidates[0].content.parts[0].text
-
-        if isinstance(extracted, str):
-            try:
-                import json
-                extracted = json.loads(extracted)
-            except:
-                extracted = {"title": "", "authors": [], "year": "", "journal": "", "objective": "", "methodology": "", "findings": "", "limitations": ""}
-
-        row = {
-            "file_name": uploaded_file.name,
-            **extracted,
-            "snippet": text[:500]  # snippet for quick reference
+    # Extract metadata via Gemini
+    try:
+        metadata = extractor.extract(text)
+    except Exception as e:
+        metadata = {
+            "title": None,
+            "authors": None,
+            "year": None,
+            "journal": None,
+            "objective": None,
+            "methodology": None,
+            "findings": None,
+            "limitations": None,
+            "error": str(e),
         }
 
-        results.append(row)
+    # Clean up
+    os.remove(temp_path)
 
-    # Display results
-    df = pd.DataFrame(results)
-    st.subheader("📊 Extracted Results")
-    st.dataframe(df[["file_name", "title", "authors", "year", "journal"]])
+    return {"filename": filename, **metadata}
 
-    # Per-row details with source snippet
-    st.subheader("🔍 Detailed View with Source Snippets")
-    for r in results:
-        with st.expander(r["file_name"]):
-            st.write("**Title:**", r.get("title", ""))
-            st.write("**Authors:**", ", ".join(r.get("authors", [])))
-            st.write("**Year:**", r.get("year", ""))
-            st.write("**Journal:**", r.get("journal", ""))
-            st.write("**Objective:**", r.get("objective", ""))
-            st.write("**Methodology:**", r.get("methodology", ""))
-            st.write("**Findings:**", r.get("findings", ""))
-            st.write("**Limitations:**", r.get("limitations", ""))
-            st.code(r["snippet"], language="text")
+# ----------------------------
+# Streamlit App
+# ----------------------------
+st.set_page_config(page_title="AI Publication Analyzer", layout="wide")
+st.title("📄 AI Publication Analyzer")
 
-    # Export
-    if output_choice == "CSV":
-        st.download_button("⬇️ Download Results as CSV", df.to_csv(index=False).encode("utf-8"), "results.csv", "text/csv")
-    elif output_choice == "Google Sheets":
-        st.info("Google Sheets integration pending setup.")
+st.write(
+    "Upload up to 50 PDF research papers. The app will extract metadata using Google Gemini."
+)
+
+# File upload widget
+uploaded_files = st.file_uploader(
+    "Upload PDF files", type=["pdf"], accept_multiple_files=True
+)
+
+# Validate file count
+if uploaded_files and len(uploaded_files) > 50:
+    st.error("⚠️ You can upload a maximum of 50 files.")
+    uploaded_files = uploaded_files[:50]
+
+if uploaded_files:
+    st.write(f"**{len(uploaded_files)} file(s) uploaded**:")
+    for f in uploaded_files:
+        st.write("- " + f.name)
+
+    if st.button("🔍 Process Files"):
+        extractor = GeminiExtractor()
+        results = []
+
+        progress = st.progress(0)
+        total = len(uploaded_files)
+
+        # Process in parallel
+        with ThreadPoolExecutor() as executor:
+            futures = {
+                executor.submit(process_single_file, f.name, f.read(), extractor): f.name
+                for f in uploaded_files
+            }
+
+            for i, future in enumerate(as_completed(futures)):
+                result = future.result()
+                results.append(result)
+                progress.progress((i + 1) / total)
+
+        # Convert results to DataFrame
+        df = pd.DataFrame(results)
+
+        st.success("✅ Metadata extraction complete!")
+
+        # Show table
+        st.dataframe(df, use_container_width=True)
+
+        # CSV download
+        csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Download Results as CSV",
+            csv,
+            "publication_metadata.csv",
+            "text/csv",
+            key="download-csv",
+        )
+else:
+    st.info("Please upload one or more PDF files to begin.")

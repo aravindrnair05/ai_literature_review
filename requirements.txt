@@ -1,6 +1,6 @@
 streamlit
-PyMuPDF
-pandas
 google-generativeai
-git+https://github.com/<username>/langextract.git
-
+langchain
+langchain-google-genai
+PyPDF2
+pdfplumber
