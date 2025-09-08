@@ -1,4 +1,3 @@
-# utils.py
 import hashlib
 import tempfile
 import os
