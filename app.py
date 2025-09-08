@@ -52,11 +52,11 @@ def process_single_file(filename, file_bytes, extractor):
 # ----------------------------
 # Streamlit App
 # ----------------------------
-st.set_page_config(page_title="AI Publication Analyzer", layout="wide")
-st.title("📄 AI Publication Analyzer")
+st.set_page_config(page_title="AI Research Article Data Extracter - Analyzer", layout="wide")
+st.title("📄 AI Research Article Data Extracter - Analyzer")
 
 st.write(
-    "Upload up to 50 PDF research papers. The app will extract metadata using Google Gemini."
+    "Upload up to 50 PDF research papers."
 )
 
 # File upload widget
