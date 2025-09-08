@@ -1,98 +1,46 @@
-# app.py
+# llm_client.py
+from typing import Optional, Dict
+from pydantic import BaseModel, Field
+from langchain import LLMChain, PromptTemplate
+from langchain.output_parsers import PydanticOutputParser
+from langchain_google_genai import GoogleGenerativeAI
+import logging
 
-import streamlit as st
-import pandas as pd
-import tempfile
-import os
-from pypdf import PdfReader
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from llm_client import GeminiExtractor
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# ----------------------------
-# Helper function
-# ----------------------------
-def process_single_file(filename, file_bytes, extractor):
-    """
-    Save uploaded PDF temporarily, extract text, and run GeminiExtractor.
-    """
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        tmp.write(file_bytes)
-        temp_path = tmp.name
+class PaperMetadata(BaseModel):
+    title: Optional[str] = Field(None, description="Paper title")
+    authors: Optional[str] = Field(None, description="Comma-separated authors or list")
+    publication_year: Optional[str] = Field(None, description="Year of publication")
+    journal_or_conference: Optional[str] = Field(None, description="Name of journal or conference")
+    research_objective: Optional[str] = Field(None, description="Research objective")
+    methodology: Optional[str] = Field(None, description="Methodology summary")
+    key_findings: Optional[str] = Field(None, description="Key findings")
+    limitations: Optional[str] = Field(None, description="Limitations")
 
-    text = ""
-    try:
-        reader = PdfReader(temp_path)
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
-    except Exception as e:
-        text = f"Error extracting text from {filename}: {e}"
+EXTRACTION_PROMPT = """
+You are a metadata extractor. Given the text of a research publication, extract the following fields in JSON...
+{text}
+"""
 
-    try:
-        metadata = extractor.extract(text)
-    except Exception as e:
-        metadata = {
-            "title": None,
-            "authors": None,
-            "publication_year": None,
-            "journal_or_conference": None,
-            "research_objective": None,
-            "methodology": None,
-            "key_findings": None,
-            "limitations": None,
-            "error": str(e),
-        }
-
-    os.remove(temp_path)
-    return {"filename": filename, **metadata}
-
-# ----------------------------
-# Streamlit App
-# ----------------------------
-st.set_page_config(page_title="AI Publication Analyzer", layout="wide")
-st.title("📄 AI Publication Analyzer")
-st.write("Upload up to 50 PDF research papers. Metadata will be extracted using Google Gemini AI.")
-
-# File upload
-uploaded_files = st.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
-if uploaded_files and len(uploaded_files) > 50:
-    st.error("⚠️ Maximum 50 files allowed.")
-    uploaded_files = uploaded_files[:50]
-
-if uploaded_files:
-    st.write(f"**{len(uploaded_files)} file(s) uploaded**:")
-    for f in uploaded_files:
-        st.write("- " + f.name)
-
-    if st.button("🔍 Process Files"):
-        extractor = GeminiExtractor()
-        results = []
-        progress = st.progress(0)
-        total = len(uploaded_files)
-
-        with ThreadPoolExecutor() as executor:
-            futures = {
-                executor.submit(process_single_file, f.name, f.read(), extractor): f.name
-                for f in uploaded_files
-            }
-
-            for i, future in enumerate(as_completed(futures)):
-                result = future.result()
-                results.append(result)
-                progress.progress((i + 1) / total)
-
-        df = pd.DataFrame(results)
-        st.success("✅ Metadata extraction complete!")
-        st.dataframe(df, use_container_width=True)
-
-        csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "⬇️ Download Results as CSV",
-            csv,
-            "publication_metadata.csv",
-            "text/csv",
-            key="download-csv",
+class GeminiExtractor:
+    def __init__(self, model: str = "gemini-2.5-flash", temperature: float = 0.0):
+        self.llm = GoogleGenerativeAI(model=model, temperature=temperature)
+        self.prompt = PromptTemplate(template=EXTRACTION_PROMPT, input_variables=["text"])
+        self.parser = PydanticOutputParser(pydantic_object=PaperMetadata)
+        self.prompt_with_format = PromptTemplate(
+            template=EXTRACTION_PROMPT + "\n\nOutput JSON schema: {format_instructions}",
+            input_variables=["text", "format_instructions"],
         )
-else:
-    st.info("Please upload one or more PDF files to begin.")
+        self.chain = LLMChain(llm=self.llm, prompt=self.prompt_with_format)
+
+    def extract(self, text: str) -> Dict:
+        format_instructions = self.parser.get_format_instructions()
+        try:
+            response = self.chain.run({"text": text, "format_instructions": format_instructions})
+            parsed = self.parser.parse(response)
+            return parsed.dict()
+        except Exception as e:
+            logger.exception("LLM extraction failed")
+            return {"error": f"LLM extraction failed: {e}"}
