@@ -1,4 +1,4 @@
-# streamlit: title = "📄🦜 Talking PDF"
+# streamlit: title = "📄🦜🔍 Talking PDF"
 import streamlit as st
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
