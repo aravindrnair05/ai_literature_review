@@ -8,7 +8,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from llm_client import GeminiExtractor
 
 
-#Title to Menu
+# ----------------------------
+# Streamlit App
+# ----------------------------
 
 import streamlit as st
 
@@ -59,11 +61,6 @@ def process_single_file(filename, file_bytes, extractor):
 
     return {"filename": filename, **metadata}
 
-# ----------------------------
-# Streamlit App
-# ----------------------------
-#st.set_page_config(page_title="AI Research Article Data Extracter - Analyzer", layout="wide")
-#st.title("📄 AI Research Article Data Extracter - Analyzer")
 
 st.write(
     "Upload up to 50 PDF research papers."
