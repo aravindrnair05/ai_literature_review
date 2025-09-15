@@ -1,61 +1,63 @@
-
 import streamlit as st
 from PyPDF2 import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-from langchain.vectorstores import FAISS
+from langchain_google_genai import GoogleGenerativeAI
+import tempfile
+import os
 
-st.set_page_config(page_title="Chat with PDF", layout="wide")
+st.set_page_config(page_title="💬 Chat with PDF", layout="wide")
 st.title("💬 Chat with PDF")
 
-uploaded_files = st.file_uploader("Upload PDF(s)", type=["pdf"], accept_multiple_files=True)
+uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
 
-if uploaded_files:
-    all_text = ""
-    for f in uploaded_files:
-        reader = PdfReader(f)
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                all_text += page_text + "\n"
+if uploaded_file:
+    # Save PDF temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(uploaded_file.read())
+        temp_path = tmp.name
 
-    # Split into chunks
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    chunks = text_splitter.split_text(all_text)
+    # Extract text
+    pdf_reader = PdfReader(temp_path)
+    text = "".join(page.extract_text() or "" for page in pdf_reader.pages)
 
-    # Embeddings (in memory)
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-    vectorstore = FAISS.from_texts(chunks, embeddings)  # stored only in RAM
+    if not text.strip():
+        st.error("Could not extract text from PDF.")
+    else:
+        # Split text
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        chunks = splitter.split_text(text)
 
-    # Conversation chain
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-    qa = ConversationalRetrievalChain.from_llm(
-        ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0),
-        retriever=vectorstore.as_retriever(),
-        memory=memory
-    )
+        # Embeddings
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        vectorstore = FAISS.from_texts(chunks, embeddings)
 
-    st.success("✅ PDF ready! Start chatting below:")
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
+        # Gemini LLM
+        llm = GoogleGenerativeAI(model="gemini-2.5-flash")
+        qa_chain = ConversationalRetrievalChain.from_llm(llm, retriever=retriever)
 
-    query = st.text_input("Ask something about the PDF:")
+        st.success("✅ PDF processed! You can now ask questions.")
 
-    if query:
-        with st.spinner("Thinking..."):
-            result = qa({"question": query})
+        # Store chat history in session
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+
+        query = st.text_input("Ask a question about the PDF:")
+
+        if query:
+            result = qa_chain({"question": query, "chat_history": st.session_state.chat_history})
             answer = result["answer"]
 
-            # Save conversation
-            st.session_state.chat_history.append(("You", query))
-            st.session_state.chat_history.append(("Bot", answer))
+            st.session_state.chat_history.append((query, answer))
 
-    # Show history
-    for role, msg in st.session_state.chat_history:
-        st.markdown(f"**{role}:** {msg}")
+            for q, a in st.session_state.chat_history:
+                st.markdown(f"**You:** {q}")
+                st.markdown(f"**AI:** {a}")
 
-else:
-    st.info("Upload at least one PDF to begin.")
+    # Cleanup
+    os.remove(temp_path)
+s
