@@ -62,8 +62,8 @@ def process_single_file(filename, file_bytes, extractor):
 # ----------------------------
 # Streamlit App
 # ----------------------------
-st.set_page_config(page_title="AI Research Article Data Extracter - Analyzer", layout="wide")
-st.title("📄 AI Research Article Data Extracter - Analyzer")
+#st.set_page_config(page_title="AI Research Article Data Extracter - Analyzer", layout="wide")
+#st.title("📄 AI Research Article Data Extracter - Analyzer")
 
 st.write(
     "Upload up to 50 PDF research papers."
