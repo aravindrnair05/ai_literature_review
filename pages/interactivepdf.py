@@ -1,3 +1,4 @@
+# streamlit: title = "📄🦜 Talking PDF"
 import streamlit as st
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -60,4 +61,3 @@ if uploaded_file:
 
     # Cleanup
     os.remove(temp_path)
-    
