@@ -1,4 +1,4 @@
-# streamlit: title = "🧠📄🤖Research Article Data Extracter"
+# streamlit: title = "🧠📄🔍Research Article Data Extracter"
 import streamlit as st
 import pandas as pd
 import tempfile
@@ -6,6 +6,15 @@ import os
 from PyPDF2 import PdfReader
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from llm_client import GeminiExtractor
+
+
+#Title to Menu
+
+import streamlit as st
+
+st.set_page_config(page_title="🧠📄🔍 Research Article Data Extractor")
+st.title("🧠📄🔍 Research Article Data Extractor")
+
 
 # ----------------------------
 # Helper function
