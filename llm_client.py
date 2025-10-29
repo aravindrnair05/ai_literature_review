@@ -2,7 +2,7 @@
 from typing import Optional, Dict
 from pydantic import BaseModel, Field
 from langchain_core.prompts import PromptTemplate
-from langchain.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI
 import logging
 import os
