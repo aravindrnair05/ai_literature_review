@@ -42,7 +42,7 @@ Text:
 
 
 class GeminiExtractor:
-    def __init__(self, model: str = "gemini-1.5-flash", temperature: float = 0.0):
+    def __init__(self, model: str = "gemini-2.5-flash", temperature: float = 0.0):
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("❌ GOOGLE_API_KEY environment variable not set")
